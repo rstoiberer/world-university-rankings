@@ -7,10 +7,13 @@ import matplotlib.pyplot as plt
 # QS World University Rankings 2024
 # Small cleaning + analysis project with pandas & NumPy.
 # Main steps:
-#  - clean obvious formatting issues in the raw CSV
-#  - convert ranks/scores to numeric values
-#  - compute a few simple insights
-#  - save a cleaned CSV + one plot
+#  - remove placeholder row
+#  - standardize column names
+#  - preserve tied-rank notation ("6=") in *_raw columns
+#  - convert ranks/scores to numeric
+#  - keep ranks as nullable integers (so no .0 in CSV)
+#  - compute a few quick insights
+#  - save cleaned CSV + one plot
 # ------------------------------------------------------------
 
 # --- Load dataset ---
@@ -21,15 +24,12 @@ print("Raw shape:", df.shape)
 print(df.head())
 
 # --- Basic cleanup / housekeeping ---
-# Make column names easier to work with (lowercase, underscores)
 df.columns = df.columns.str.lower().str.replace(" ", "_")
 
-# The dataset includes a weird first row with text placeholders
-# (like "rank display", "institution", etc.). We drop it.
+# Drop weird placeholder first row (text instead of real data)
 if isinstance(df.loc[0, "2024_rank"], str):
     df = df.drop(index=0).reset_index(drop=True)
 
-# Remove duplicates just in case
 df = df.drop_duplicates()
 
 print("\nAfter dropping placeholder row + duplicates:", df.shape)
@@ -38,22 +38,20 @@ print("\nAfter dropping placeholder row + duplicates:", df.shape)
 print("\nMissing values per column:")
 print(df.isna().sum().sort_values(ascending=False))
 
-# --- Fix tied ranks before numeric conversion ---
-# QS uses "=" to indicate ties (e.g., "6=" means tied for rank 6).
-# If we don't remove "=", pandas would turn those into NaN.
+# --- Preserve originals + fix tied ranks ---
+# QS uses "=" to indicate ties (e.g., "6=").
+# We keep an original copy so the meaning is visible in the cleaned file.
 for col in df.columns:
     if "rank" in col:
-        # convert to string first so replace always works
+        df[col + "_raw"] = df[col]  # keep original string (with "=" if present)
         df[col] = df[col].astype(str).str.replace("=", "", regex=False)
 
 # --- Convert numeric-like columns ---
-# Many rank/score columns are strings or have symbols.
-# We convert anything with "rank" or "score" in the name to numeric.
 for col in df.columns:
     if "score" in col or "rank" in col:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# Main score column (QS uses Overall SCORE / overall_score)
+# Main score column
 score_col = "overall_score" if "overall_score" in df.columns else None
 if score_col is None:
     score_candidates = [c for c in df.columns if "score" in c]
@@ -64,8 +62,13 @@ df_clean = df.dropna(subset=[score_col]).copy()
 
 print("\nCleaned shape:", df_clean.shape)
 
-# Name column (QS uses Institution Name)
 name_col = "institution_name"
+
+# --- Make rank columns look like ranks (ints, not floats) ---
+# Nullable Int64 keeps NaNs but displays cleanly without ".0"
+rank_cols = [c for c in df_clean.columns if c.endswith("_rank") and not c.endswith("_rank_raw")]
+for c in rank_cols:
+    df_clean[c] = df_clean[c].round().astype("Int64")
 
 # --- NumPy summary stats ---
 scores = df_clean[score_col].to_numpy()
@@ -82,8 +85,6 @@ print("\nTop 10 universities by score:")
 print(top10[[name_col, score_col]].to_string(index=False))
 
 # --- Rank changes (2023 → 2024) ---
-# Positive rank_change means a school improved (moved up).
-# Some schools might be missing 2023 rank, so NaNs may still appear.
 if "2023_rank" in df_clean.columns and "2024_rank" in df_clean.columns:
     df_clean["rank_change"] = df_clean["2023_rank"] - df_clean["2024_rank"]
 
@@ -91,13 +92,18 @@ if "2023_rank" in df_clean.columns and "2024_rank" in df_clean.columns:
     biggest_fallers = df_clean.sort_values("rank_change").head(10)
 
     print("\nBiggest climbers (2023 → 2024):")
-    print(biggest_climbers[[name_col, "2023_rank", "2024_rank", "rank_change"]].to_string(index=False))
+    print(
+        biggest_climbers[[name_col, "2023_rank", "2024_rank", "rank_change"]]
+        .to_string(index=False)
+    )
 
     print("\nBiggest fallers (2023 → 2024):")
-    print(biggest_fallers[[name_col, "2023_rank", "2024_rank", "rank_change"]].to_string(index=False))
+    print(
+        biggest_fallers[[name_col, "2023_rank", "2024_rank", "rank_change"]]
+        .to_string(index=False)
+    )
 
 # --- Country averages ---
-# Simple but useful: which countries have the strongest average scores?
 country_avg = (
     df_clean.groupby("country")[score_col]
     .mean()
