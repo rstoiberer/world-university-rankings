@@ -5,19 +5,21 @@ import matplotlib.pyplot as plt
 
 # ------------------------------------------------------------
 # QS World University Rankings 2024
-# Small cleaning + analysis project with pandas & NumPy.
-# Main steps:
-#  - remove placeholder row
-#  - standardize column names
-#  - preserve tied-rank notation ("6=") in *_raw columns
-#  - convert ranks/scores to numeric
-#  - keep ranks as nullable integers (so no .0 in CSV)
-#  - compute a few quick insights
-#  - save cleaned CSV + one plot
+# Cleaning + quick analysis project (pandas, NumPy).
+#
+# What this script does:
+# 1) Loads the raw QS 2024 CSV
+# 2) Drops the extra placeholder row and duplicates
+# 3) Preserves original tied-rank notation in *_raw columns (e.g., "6=")
+# 4) Removes "=" from ranks so ties convert correctly to numbers
+# 5) Converts rank/score columns to numeric for analysis
+# 6) Computes simple insights + saves a histogram
+# 7) Exports a cleaned CSV where ranks LOOK like integers (no .0)
+#    even when viewed on GitHub/Excel.
 # ------------------------------------------------------------
 
 # --- Load dataset ---
-DATA_PATH = os.path.join("data", "qs2024.csv")  # change filename if yours differs
+DATA_PATH = os.path.join("data", "qs2024.csv")  # change if your filename differs
 df = pd.read_csv(DATA_PATH)
 
 print("Raw shape:", df.shape)
@@ -26,10 +28,11 @@ print(df.head())
 # --- Basic cleanup / housekeeping ---
 df.columns = df.columns.str.lower().str.replace(" ", "_")
 
-# Drop weird placeholder first row (text instead of real data)
+# Drop placeholder first row (contains text like "rank display")
 if isinstance(df.loc[0, "2024_rank"], str):
     df = df.drop(index=0).reset_index(drop=True)
 
+# Drop duplicates
 df = df.drop_duplicates()
 
 print("\nAfter dropping placeholder row + duplicates:", df.shape)
@@ -39,11 +42,11 @@ print("\nMissing values per column:")
 print(df.isna().sum().sort_values(ascending=False))
 
 # --- Preserve originals + fix tied ranks ---
-# QS uses "=" to indicate ties (e.g., "6=").
-# We keep an original copy so the meaning is visible in the cleaned file.
+# QS uses "=" to indicate tied ranks (e.g., "6=").
+# We keep the original strings for transparency and strip "=" for numeric use.
 for col in df.columns:
     if "rank" in col:
-        df[col + "_raw"] = df[col]  # keep original string (with "=" if present)
+        df[col + "_raw"] = df[col]  # keep original (ties visible here)
         df[col] = df[col].astype(str).str.replace("=", "", regex=False)
 
 # --- Convert numeric-like columns ---
@@ -57,18 +60,12 @@ if score_col is None:
     score_candidates = [c for c in df.columns if "score" in c]
     score_col = score_candidates[0]
 
-# Keep rows that at least have an overall score
+# Keep rows with valid overall score (main QS metric)
 df_clean = df.dropna(subset=[score_col]).copy()
 
 print("\nCleaned shape:", df_clean.shape)
 
 name_col = "institution_name"
-
-# --- Make rank columns look like ranks (ints, not floats) ---
-# Nullable Int64 keeps NaNs but displays cleanly without ".0"
-rank_cols = [c for c in df_clean.columns if c.endswith("_rank") and not c.endswith("_rank_raw")]
-for c in rank_cols:
-    df_clean[c] = df_clean[c].round().astype("Int64")
 
 # --- NumPy summary stats ---
 scores = df_clean[score_col].to_numpy()
@@ -123,7 +120,25 @@ plt.tight_layout()
 plt.savefig("score_distribution.png")
 plt.close()
 
+# ------------------------------------------------------------
+# EXPORT FIX:
+# GitHub/Excel likes to re-infer types from CSV text.
+# If a rank column has blanks, viewers often show 1.0, 2.0, ...
+# To avoid that, we export ranks as clean strings WITHOUT .0.
+# ------------------------------------------------------------
+export_df = df_clean.copy()
+
+rank_cols = [
+    c for c in export_df.columns
+    if c.endswith("_rank") and not c.endswith("_rank_raw")
+]
+
+for c in rank_cols:
+    export_df[c] = export_df[c].astype("Int64")      # keep true integer values
+    export_df[c] = export_df[c].astype(str)          # export as strings
+    export_df[c] = export_df[c].replace("<NA>", "")  # show missing as blank
+
 # --- Save cleaned dataset ---
 OUT_PATH = os.path.join("data", "qs2024_cleaned.csv")
-df_clean.to_csv(OUT_PATH, index=False)
+export_df.to_csv(OUT_PATH, index=False)
 print("\nSaved cleaned file to:", OUT_PATH)
