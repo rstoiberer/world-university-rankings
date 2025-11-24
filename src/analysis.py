@@ -5,9 +5,12 @@ import matplotlib.pyplot as plt
 
 # ------------------------------------------------------------
 # QS World University Rankings 2024
-# Quick cleaning + small analysis project using pandas & NumPy.
-# Goal: clean messy fields, convert scores/ranks to numbers,
-# and pull a few insights (top schools, movers, country averages).
+# Small cleaning + analysis project with pandas & NumPy.
+# Main steps:
+#  - clean obvious formatting issues in the raw CSV
+#  - convert ranks/scores to numeric values
+#  - compute a few simple insights
+#  - save a cleaned CSV + one plot
 # ------------------------------------------------------------
 
 # --- Load dataset ---
@@ -34,6 +37,14 @@ print("\nAfter dropping placeholder row + duplicates:", df.shape)
 # --- Missing value check ---
 print("\nMissing values per column:")
 print(df.isna().sum().sort_values(ascending=False))
+
+# --- Fix tied ranks before numeric conversion ---
+# QS uses "=" to indicate ties (e.g., "6=" means tied for rank 6).
+# If we don't remove "=", pandas would turn those into NaN.
+for col in df.columns:
+    if "rank" in col:
+        # convert to string first so replace always works
+        df[col] = df[col].astype(str).str.replace("=", "", regex=False)
 
 # --- Convert numeric-like columns ---
 # Many rank/score columns are strings or have symbols.
@@ -72,7 +83,7 @@ print(top10[[name_col, score_col]].to_string(index=False))
 
 # --- Rank changes (2023 → 2024) ---
 # Positive rank_change means a school improved (moved up).
-# Some schools might be missing 2023 rank, so NaNs will appear.
+# Some schools might be missing 2023 rank, so NaNs may still appear.
 if "2023_rank" in df_clean.columns and "2024_rank" in df_clean.columns:
     df_clean["rank_change"] = df_clean["2023_rank"] - df_clean["2024_rank"]
 
@@ -97,7 +108,7 @@ country_avg = (
 print("\nTop 10 countries by average overall score:")
 print(country_avg)
 
-# Distribution of overall scores
+# --- Visualization: distribution of overall scores ---
 plt.hist(df_clean[score_col].dropna(), bins=30)
 plt.title("QS 2024 Overall Score Distribution")
 plt.xlabel("Overall Score")
