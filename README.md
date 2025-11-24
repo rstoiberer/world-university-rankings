@@ -41,3 +41,14 @@ Overall, the data suggests that while top-ranked institutions remain consistent 
 A simple histogram was created to show the distribution of overall scores:
 ![Score Distribution](score_distribution.png)
 
+## Data Source
+
+The dataset used in this project comes from the **QS World University Rankings 2024**, retrieved from Kaggle.  
+Original dataset: https://www.kaggle.com  
+All credit for the data goes to QS and the Kaggle uploader.
+
+## License
+
+This project is for educational purposes only.  
+The dataset is the property of QS and the Kaggle uploader; analysis code is my own.
+
