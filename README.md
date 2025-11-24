@@ -39,5 +39,5 @@ Overall, the data suggests that while top-ranked institutions remain consistent 
 ## Visualization
 
 A simple histogram was created to show the distribution of overall scores:
-score_distribution.png
+![Score Distribution](score_distribution.png)
 
